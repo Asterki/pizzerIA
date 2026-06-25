@@ -35,6 +35,7 @@
     "lucide-react": "^0.577.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-sketch-canvas": "^8.0.0",
     "streamdown": "^2.3.0",
     "tailwindcss": "^4.1.18",
     "zod": "^4.3.6"
