@@ -9,8 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WhiteboardRouteImport } from './routes/whiteboard'
 import { Route as IndexRouteImport } from './routes/index'
 
+const WhiteboardRoute = WhiteboardRouteImport.update({
+  id: '/whiteboard',
+  path: '/whiteboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +25,39 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/whiteboard': typeof WhiteboardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/whiteboard': typeof WhiteboardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/whiteboard': typeof WhiteboardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/whiteboard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/whiteboard'
+  id: '__root__' | '/' | '/whiteboard'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  WhiteboardRoute: typeof WhiteboardRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/whiteboard': {
+      id: '/whiteboard'
+      path: '/whiteboard'
+      fullPath: '/whiteboard'
+      preLoaderRoute: typeof WhiteboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,6 +70,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  WhiteboardRoute: WhiteboardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -12,40 +12,30 @@ import {
 const { Header, Sider, Content, Footer } = Layout
 const { Text } = Typography
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PizzerIA Ant Design Theme
-// Inspired by design.md: near-black canvas, Rosso Corsa red (#c0392b adapted),
-// sharp corners (borderRadius ~0), Inter 500 for display, editorial precision.
-// ─────────────────────────────────────────────────────────────────────────────
 const pizzerIATheme = {
   algorithm: theme.darkAlgorithm,
   token: {
-    // ── Brand colors ─────────────────────────────────────────────────────────
     colorPrimary: '#c0392b',          // Tomato red — PizzerIA's "Rosso Corsa"
     colorPrimaryHover: '#9d2211',     // Darker on hover
     colorPrimaryActive: '#7b241c',    // Press state
     colorPrimaryBg: 'rgba(192,57,43,0.08)',
 
-    // ── Canvas / surfaces (design.md dark-first approach) ─────────────────────
     colorBgBase: '#181818',           // Near-black canvas — never pure black
     colorBgContainer: '#1e1e1e',      // Cards, panels (canvas-elevated)
     colorBgElevated: '#252525',       // Modals, dropdowns
     colorBgLayout: '#141414',         // Page layout floor
     colorBgSpotlight: '#2a2a2a',
 
-    // ── Text ─────────────────────────────────────────────────────────────────
     colorText: '#ffffff',             // Ink on dark
     colorTextSecondary: '#969696',    // Body muted (design.md colors.body)
     colorTextTertiary: '#666666',     // Captions / subtitles (colors.muted)
     colorTextQuaternary: '#444444',   // Disabled
     colorTextLightSolid: '#ffffff',
 
-    // ── Borders & dividers ───────────────────────────────────────────────────
     colorBorder: '#303030',           // Hairline on dark (colors.hairline)
     colorBorderSecondary: '#252525',
     colorSplit: '#303030',
 
-    // ── Semantic ─────────────────────────────────────────────────────────────
     colorSuccess: '#03904a',          // design.md colors.semantic-success
     colorWarning: '#f13a2c',          // colors.semantic-warning
     colorError: '#c0392b',
@@ -241,7 +231,7 @@ interface PizzerIALayoutProps {
 }
 
 const PizzerIALayoutInner: React.FC<PizzerIALayoutProps> = ({ children, activeKey = '/', onNavigate }) => {
-  const [collapsed, setCollapsed] = React.useState(false)
+  const [collapsed, setCollapsed] = React.useState(true)
 
   return (
     <Layout style={{ minHeight: '100vh', background: '#141414' }}>
@@ -306,10 +296,6 @@ const PizzerIALayoutInner: React.FC<PizzerIALayoutProps> = ({ children, activeKe
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Public export — ConfigProvider + App wrapping the layout.
-// Drop this into your router/app root. No extra ConfigProvider needed in main.tsx.
-// ─────────────────────────────────────────────────────────────────────────────
 export const PizzerIALayout: React.FC<PizzerIALayoutProps> = (props) => (
   <ConfigProvider theme={pizzerIATheme}>
     <App>
