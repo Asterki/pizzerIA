@@ -1,5 +1,5 @@
 import React from 'react'
-import { Layout, Menu, Badge, Avatar, Typography, Space } from 'antd'
+import { ConfigProvider, App, Layout, Menu, Badge, Avatar, Typography, Space, theme } from 'antd'
 import {
   HomeOutlined,
   FormOutlined,
@@ -12,7 +12,193 @@ import {
 const { Header, Sider, Content, Footer } = Layout
 const { Text } = Typography
 
-// ── Inline PizzerIA SVG Logo ─────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PizzerIA Ant Design Theme
+// Inspired by design.md: near-black canvas, Rosso Corsa red (#c0392b adapted),
+// sharp corners (borderRadius ~0), Inter 500 for display, editorial precision.
+// ─────────────────────────────────────────────────────────────────────────────
+const pizzerIATheme = {
+  algorithm: theme.darkAlgorithm,
+  token: {
+    // ── Brand colors ─────────────────────────────────────────────────────────
+    colorPrimary: '#c0392b',          // Tomato red — PizzerIA's "Rosso Corsa"
+    colorPrimaryHover: '#9d2211',     // Darker on hover
+    colorPrimaryActive: '#7b241c',    // Press state
+    colorPrimaryBg: 'rgba(192,57,43,0.08)',
+
+    // ── Canvas / surfaces (design.md dark-first approach) ─────────────────────
+    colorBgBase: '#181818',           // Near-black canvas — never pure black
+    colorBgContainer: '#1e1e1e',      // Cards, panels (canvas-elevated)
+    colorBgElevated: '#252525',       // Modals, dropdowns
+    colorBgLayout: '#141414',         // Page layout floor
+    colorBgSpotlight: '#2a2a2a',
+
+    // ── Text ─────────────────────────────────────────────────────────────────
+    colorText: '#ffffff',             // Ink on dark
+    colorTextSecondary: '#969696',    // Body muted (design.md colors.body)
+    colorTextTertiary: '#666666',     // Captions / subtitles (colors.muted)
+    colorTextQuaternary: '#444444',   // Disabled
+    colorTextLightSolid: '#ffffff',
+
+    // ── Borders & dividers ───────────────────────────────────────────────────
+    colorBorder: '#303030',           // Hairline on dark (colors.hairline)
+    colorBorderSecondary: '#252525',
+    colorSplit: '#303030',
+
+    // ── Semantic ─────────────────────────────────────────────────────────────
+    colorSuccess: '#03904a',          // design.md colors.semantic-success
+    colorWarning: '#f13a2c',          // colors.semantic-warning
+    colorError: '#c0392b',
+    colorInfo: '#4c98b9',             // colors.semantic-info
+
+    // ── Sharp corners — brand precision (design.md: rounded.none = 0px) ──────
+    // antd enforces a minimum of ~2px internally; true 0 is set per-component
+    borderRadius: 2,
+    borderRadiusLG: 2,
+    borderRadiusSM: 2,
+    borderRadiusXS: 2,
+
+    // ── Typography ───────────────────────────────────────────────────────────
+    fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
+    fontSize: 14,                     // typography.body-md
+    fontSizeLG: 16,
+    fontSizeXL: 18,
+    fontSizeHeading1: 36,             // typography.display-lg
+    fontSizeHeading2: 26,             // typography.display-md
+    fontSizeHeading3: 18,             // typography.title-md
+    fontWeightStrong: 500,            // design.md: display weight stays at 500
+
+    // ── Spacing (8px ladder: xxxs 4 / xxs 8 / xs 16 / sm 24 / md 32 …) ──────
+    padding: 16,
+    paddingLG: 24,
+    paddingXL: 32,
+    paddingSM: 12,
+    paddingXS: 8,
+    margin: 16,
+    marginLG: 24,
+    marginXL: 32,
+
+    // ── Motion ───────────────────────────────────────────────────────────────
+    motionDurationMid: '0.18s',
+    motionDurationSlow: '0.25s',
+    motionEaseInOut: 'cubic-bezier(0.16, 1, 0.3, 1)',
+
+    // ── Control heights ──────────────────────────────────────────────────────
+    controlHeight: 40,
+    controlHeightLG: 48,              // design.md button height = 48px
+    controlHeightSM: 32,
+
+    // ── Links ────────────────────────────────────────────────────────────────
+    colorLink: '#c0392b',
+    colorLinkHover: '#9d2211',
+    colorLinkActive: '#7b241c',
+
+    // ── Shadows — single soft tier (design.md: no shadow tiers) ─────────────
+    boxShadow: '0 4px 8px rgba(0,0,0,0.18)',
+    boxShadowSecondary: '0 2px 4px rgba(0,0,0,0.12)',
+  },
+  components: {
+    Layout: {
+      siderBg: '#141414',
+      headerBg: '#181818',
+      footerBg: '#0e0e0e',
+      triggerBg: '#0e0e0e',
+      triggerColor: '#969696',
+    },
+    Menu: {
+      darkItemBg: 'transparent',
+      darkItemColor: 'rgba(255,255,255,0.65)',
+      darkItemHoverColor: '#ffffff',
+      darkItemSelectedColor: '#ffffff',
+      darkItemSelectedBg: 'rgba(192,57,43,0.18)',   // subtle red tint on selection
+      darkItemHoverBg: 'rgba(255,255,255,0.06)',
+      darkSubMenuItemBg: '#141414',
+      itemBorderRadius: 0,                           // sharp nav items
+      itemHeight: 44,                                // 44px WCAG touch target
+      iconSize: 16,
+      fontSize: 13,                                  // typography.nav-link size
+    },
+    Button: {
+      primaryColor: '#ffffff',
+      borderRadius: 0,                               // sharp CTA — brand signature
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      fontWeight: 700,
+      paddingInline: 32,
+      paddingInlineLG: 40,
+      contentFontSize: 14,
+    },
+    Input: {
+      colorBgContainer: '#1e1e1e',
+      colorBorder: '#303030',
+      colorText: '#ffffff',
+      activeBorderColor: '#c0392b',
+      hoverBorderColor: '#7b241c',
+      borderRadius: 0,
+    },
+    Card: {
+      colorBgContainer: '#1e1e1e',
+      colorBorderSecondary: '#303030',
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      headerBg: '#252525',
+    },
+    Badge: { colorBgContainer: '#c0392b' },
+    Avatar: { colorBgContainer: '#7b241c' },
+    Table: {
+      colorBgContainer: '#1e1e1e',
+      headerBg: '#252525',
+      headerColor: '#969696',
+      rowHoverBg: '#252525',
+      borderColor: '#303030',
+      borderRadius: 0,
+    },
+    Dropdown: { colorBgElevated: '#252525', borderRadius: 2 },
+    Modal: { contentBg: '#1e1e1e', headerBg: '#1e1e1e', borderRadiusLG: 2 },
+    Select: {
+      colorBgContainer: '#1e1e1e',
+      colorBorder: '#303030',
+      colorText: '#ffffff',
+      selectorBg: '#1e1e1e',
+      optionSelectedBg: 'rgba(192,57,43,0.18)',
+      borderRadius: 0,
+    },
+    Tag: {
+      // design.md: pill geometry reserved for badge labels only (rounded.full)
+      borderRadiusSM: 9999,
+      colorBgContainer: '#252525',
+      colorText: '#ffffff',
+      colorBorder: '#303030',
+      fontSize: 11,
+    },
+    Tabs: {
+      inkBarColor: '#c0392b',
+      itemSelectedColor: '#ffffff',
+      itemColor: '#969696',
+      itemHoverColor: '#ffffff',
+    },
+    Breadcrumb: {
+      itemColor: '#969696',
+      lastItemColor: '#ffffff',
+      separatorColor: '#444444',
+      linkColor: '#969696',
+      linkHoverColor: '#c0392b',
+      fontSize: 13,
+    },
+    Typography: {
+      colorText: '#ffffff',
+      colorTextSecondary: '#969696',
+      fontWeightStrong: 500,
+    },
+    Divider: { colorSplit: '#303030' },
+    Notification: { colorBgElevated: '#252525', colorText: '#ffffff', borderRadiusLG: 2 },
+    Message: { colorBgElevated: '#252525', colorText: '#ffffff' },
+  },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SVG Logo (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 const PizzerIALogo: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
   <div
     style={{
@@ -20,47 +206,27 @@ const PizzerIALogo: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
       alignItems: 'center',
       gap: 10,
       padding: '16px 20px 12px',
-      borderBottom: '1px solid rgba(255,255,255,0.12)',
+      borderBottom: '1px solid #303030',
       marginBottom: 8,
     }}
   >
-    {/* Pizza slice SVG mark */}
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 32 32"
-      fill="none"
-      aria-label="PizzerIA logo"
-      style={{ flexShrink: 0 }}
-    >
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-label="PizzerIA logo" style={{ flexShrink: 0 }}>
       <circle cx="16" cy="16" r="15" fill="#c0392b" />
       <path d="M16 3 L29 26 L3 26 Z" fill="#e8cfa0" />
       <path d="M16 3 L29 26 L3 26 Z" fill="none" stroke="#c0392b" strokeWidth="1.5" />
-      {/* Pepperoni */}
       <circle cx="16" cy="18" r="2.5" fill="#922b21" />
       <circle cx="11" cy="22" r="2" fill="#922b21" />
       <circle cx="21" cy="22" r="2" fill="#922b21" />
-      {/* Crust */}
       <path d="M3 26 Q16 30 29 26" stroke="#b5651d" strokeWidth="3" fill="none" strokeLinecap="round" />
     </svg>
     {!collapsed && (
-      <span
-        style={{
-          fontFamily: "'Georgia', serif",
-          fontWeight: 700,
-          fontSize: 20,
-          color: '#fff',
-          letterSpacing: '-0.3px',
-          lineHeight: 1,
-        }}
-      >
+      <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 500, fontSize: 20, color: '#fff', letterSpacing: '-0.3px', lineHeight: 1 }}>
         PizzerIA
       </span>
     )}
   </div>
 )
 
-// ── Nav items ────────────────────────────────────────────────────────────────
 const navItems = [
   { key: '/', icon: <HomeOutlined />, label: 'Home' },
   { key: '/whiteboard', icon: <FormOutlined />, label: 'Whiteboard' },
@@ -68,47 +234,25 @@ const navItems = [
   { key: '/team', icon: <TeamOutlined />, label: 'Team' },
 ]
 
-// ── Ant Design token overrides for the red pizza theme ───────────────────────
-// Use ConfigProvider in your app root with these values:
-// colorPrimary: '#c0392b'
-// colorBgContainer: '#fff'
-// See App.tsx / main.tsx example at the bottom of this file.
-
 interface PizzerIALayoutProps {
   children: React.ReactNode
-  /** Active nav key — pass the current route path */
   activeKey?: string
   onNavigate?: (key: string) => void
 }
 
-export const PizzerIALayout: React.FC<PizzerIALayoutProps> = ({
-  children,
-  activeKey = '/',
-  onNavigate,
-}) => {
+const PizzerIALayoutInner: React.FC<PizzerIALayoutProps> = ({ children, activeKey = '/', onNavigate }) => {
   const [collapsed, setCollapsed] = React.useState(false)
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      {/* ── Sidebar ── */}
+    <Layout style={{ minHeight: '100vh', background: '#141414' }}>
       <Sider
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
         width={220}
-        style={{
-          background: '#922b21',        // deep pizza-red
-          boxShadow: '2px 0 8px rgba(0,0,0,0.18)',
-        }}
+        style={{ background: '#141414', borderRight: '1px solid #303030' }}
         trigger={
-          <div
-            style={{
-              background: '#7b241c',
-              color: '#fff',
-              fontSize: 16,
-              lineHeight: '40px',
-            }}
-          >
+          <div style={{ background: '#0e0e0e', color: '#969696', fontSize: 16, lineHeight: '40px', letterSpacing: '0.65px', textTransform: 'uppercase' }}>
             {collapsed ? '›' : '‹'}
           </div>
         }
@@ -119,78 +263,57 @@ export const PizzerIALayout: React.FC<PizzerIALayoutProps> = ({
           selectedKeys={[activeKey]}
           items={navItems}
           onClick={({ key }) => onNavigate?.(key)}
-          style={{
-            background: 'transparent',
-            borderRight: 'none',
-            color: 'rgba(255,255,255,0.85)',
-          }}
           theme="dark"
+          style={{ background: 'transparent', borderRight: 'none' }}
         />
       </Sider>
 
-      <Layout>
-        {/* ── Top Header ── */}
+      <Layout style={{ background: '#181818' }}>
         <Header
           style={{
-            background: '#c0392b',    // vibrant tomato red
-            padding: '0 24px',
+            background: '#181818',
+            padding: '0 32px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            borderBottom: '1px solid #303030',
             position: 'sticky',
             top: 0,
             zIndex: 100,
+            height: 64,
           }}
         >
-          {/* Breadcrumb / page title area */}
-          <Text
-            style={{
-              color: '#fff',
-              fontFamily: "'Georgia', serif",
-              fontSize: 18,
-              fontWeight: 600,
-            }}
-          >
-            🍕 PizzerIA — AI Whiteboard
+          <Text style={{ color: '#fff', fontFamily: "'Inter', system-ui, sans-serif", fontSize: 13, fontWeight: 600, letterSpacing: '0.65px', textTransform: 'uppercase' }}>
+            🍕 PizzerIA
           </Text>
-
-          {/* Right actions */}
           <Space size="middle">
             <Badge count={3} size="small">
-              <BellOutlined style={{ fontSize: 20, color: '#fff', cursor: 'pointer' }} />
+              <BellOutlined style={{ fontSize: 18, color: '#969696', cursor: 'pointer' }} />
             </Badge>
-            <Avatar
-              icon={<UserOutlined />}
-              style={{ background: '#7b241c', cursor: 'pointer' }}
-            />
+            <Avatar icon={<UserOutlined />} style={{ background: '#7b241c', cursor: 'pointer' }} />
           </Space>
         </Header>
 
-        {/* ── Main Content ── */}
-        <Content
-          style={{
-            background: '#fdf6f0',   // warm off-white — like fresh dough
-            minHeight: 'calc(100vh - 64px - 48px)',
-            overflow: 'auto',
-          }}
-        >
+        <Content style={{ background: '#181818', minHeight: 'calc(100vh - 64px - 48px)', overflow: 'auto' }}>
           {children}
         </Content>
 
-        {/* ── Footer ── */}
-        <Footer
-          style={{
-            textAlign: 'center',
-            background: '#922b21',
-            color: 'rgba(255,255,255,0.7)',
-            padding: '12px 24px',
-            fontSize: 13,
-          }}
-        >
-          PizzerIA © {new Date().getFullYear()} — Crafted with 🍕 & AI
+        <Footer style={{ textAlign: 'center', background: '#0e0e0e', borderTop: '1px solid #303030', color: '#666666', padding: '12px 24px', fontSize: 13, letterSpacing: '0.3px' }}>
+          PizzerIA © {new Date().getFullYear()} - Sofía Baires, Fernando Rivera, Angel Castillo
         </Footer>
       </Layout>
     </Layout>
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public export — ConfigProvider + App wrapping the layout.
+// Drop this into your router/app root. No extra ConfigProvider needed in main.tsx.
+// ─────────────────────────────────────────────────────────────────────────────
+export const PizzerIALayout: React.FC<PizzerIALayoutProps> = (props) => (
+  <ConfigProvider theme={pizzerIATheme}>
+    <App>
+      <PizzerIALayoutInner {...props} />
+    </App>
+  </ConfigProvider>
+)
