@@ -2,20 +2,29 @@
 
 import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Input, Card, Skeleton, Empty, App, Tooltip } from 'antd'
+import { Input, Card, Skeleton, Empty, App, Tooltip, Tag, Avatar } from 'antd'
 import {
   SearchOutlined,
   ArrowRightOutlined,
   PlusOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
+  EditOutlined,
+  BookOutlined,
+  BulbOutlined,
+  FormOutlined,
+  SendOutlined,
+  RobotOutlined,
+  UserOutlined,
+  MessageOutlined,
+  CloseOutlined,
 } from '@ant-design/icons'
 import { useWhiteboards } from '#/features/whiteboard/hooks/useWhiteboards'
 import type { Whiteboard } from '#/features/whiteboard/types'
 
 export const Route = createFileRoute('/')({ component: LandingPage })
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatRelative(ts: number): string {
   const diff = Date.now() - ts
   const mins = Math.floor(diff / 60_000)
@@ -29,197 +38,14 @@ function formatRelative(ts: number): string {
   return new Date(ts).toLocaleDateString('es-HN', { day: 'numeric', month: 'short' })
 }
 
-// ─── Chalk Board Shader ───────────────────────────────────────────────────────
-// Dark board texture + animated chalk dust + faint ghost pizza geometry.
-// Three layers:
-//   1. Board grain   — high-freq noise, near-black, subtle warmth
-//   2. Chalk dust    — slow drifting bright specks along horizontal streaks
-//   3. Ghost sketch  — a faint pizza-slice triangle + arc drawn in shader space
-const VERT_SRC = `
-  attribute vec2 a_pos;
-  void main() {
-    gl_Position = vec4(a_pos, 0.0, 1.0);
-  }
-`
+const RULED_LINES_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='32'%3E%3Cline x1='0' y1='31' x2='100%25' y2='31' stroke='%23ebe6df' stroke-width='1'/%3E%3C/svg%3E")`
 
-// Simplex noise + flowing ember field — all in GLSL ES 1.0 (maximum compat)
-const FRAG_SRC = `
-  precision mediump float;
-  uniform float u_time;
-  uniform vec2  u_res;
-
-  // ── Simplex 2D noise (Stefan Gustavson, public domain) ──────────────────
-  vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
-
-  float snoise(vec2 v) {
-    const vec4 C = vec4(0.211324865405187,0.366025403784439,
-                       -0.577350269189626,0.024390243902439);
-    vec2 i  = floor(v + dot(v, C.yy));
-    vec2 x0 = v -   i + dot(i, C.xx);
-    vec2 i1 = (x0.x > x0.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);
-    vec4 x12 = x0.xyxy + C.xxzz;
-    x12.xy -= i1;
-    i = mod(i, 289.0);
-    vec3 p = permute(permute(i.y + vec3(0.0,i1.y,1.0))
-                            + i.x + vec3(0.0,i1.x,1.0));
-    vec3 m = max(0.5 - vec3(dot(x0,x0),
-                             dot(x12.xy,x12.xy),
-                             dot(x12.zw,x12.zw)), 0.0);
-    m = m*m; m = m*m;
-    vec3 x = 0.01*fract(p * C.www) - 1.0;
-    vec3 h = abs(x) - 0.5;
-    vec3 ox = floor(x + 0.5);
-    vec3 a0 = x - ox;
-    m *= 1.79284291400159 - 0.85373472095314*(a0*a0 + h*h);
-    vec3 g;
-    g.x  = a0.x * x0.x  + h.x * x0.y;
-    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-    return 130.0 * dot(m, g);
-  }
-
-  // ── FBM — 4 octaves, slow drift ─────────────────────────────────────────
-  float fbm(vec2 p) {
-    float v = 0.0, a = 0.4;
-    vec2  shift = vec2(100.0);
-    mat2  rot   = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
-    for (int i = 0; i < 4; i++) {
-      v += a * snoise(p);
-      p  = rot * p * 0.1 + shift;
-      a *= 0.05;
-    }
-    return v;
-  }
-
-  void main() {
-    // Normalised UV, aspect-corrected
-    vec2 uv = gl_FragCoord.xy / u_res;
-    uv.x *= u_res.x / u_res.y;
-
-    float t = u_time * 0.08;   // very slow — editorial calm
-
-    // Two layers of FBM drifting in different directions for depth
-    vec2 q = vec2(fbm(uv + t),
-                  fbm(uv + vec2(1.7, 9.2) + t * 0.9));
-
-    vec2 r = vec2(fbm(uv + 1.0 * q + vec2(1.7, 9.2) + t * 0.5),
-                  fbm(uv + 1.0 * q + vec2(8.3, 2.8) + t * 0.4));
-
-    float f = fbm(uv + r);
-
-    // Remap to 0..1
-    f = 0.5 + 0.5 * f;
-
-    // Colour ramp: #141414 (canvas) → deep maroon → Rosso Corsa → faint amber tip
-    // All kept at very low brightness — max ~12% luminance so content stays readable
-    vec3 dark   = vec3(0.078, 0.078, 0.078);   // #141414 — canvas floor
-    vec3 maroon = vec3(0.30,  0.04,  0.04);    // deep crimson ember
-    vec3 rosso  = vec3(0.75,  0.22,  0.17);    // #c0392b Rosso Corsa
-    vec3 amber  = vec3(0.85,  0.35,  0.15);    // warm ember tip (rare)
-
-    vec3 col = mix(dark,   maroon, smoothstep(0.0,  0.45, f));
-    col       = mix(col,   rosso,  smoothstep(0.45, 0.75, f));
-    col       = mix(col,   amber,  smoothstep(0.75, 1.0,  f));
-
-    // Keep overall brightness very low — atmospheric, not distracting
-    col *= 0.18;
-
-    // Vignette — darker at edges, brighter centre, focuses content
-    vec2 vig = (gl_FragCoord.xy / u_res) - 0.5;
-    float vignette = 1.0 - dot(vig, vig) * 2.6;
-    col *= clamp(vignette, 0.0, 1.0);
-
-    gl_FragColor = vec4(col, 1.0);
-  }
-`
-
-const EmberShader: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const gl = canvas.getContext('webgl', { alpha: false, antialias: false })
-    if (!gl) return   // silent fallback — canvas stays #141414
-
-    // ── Compile shaders ──────────────────────────────────────────────────
-    function compile(type: number, src: string) {
-      const s = gl!.createShader(type)!
-      gl!.shaderSource(s, src)
-      gl!.compileShader(s)
-      return s
-    }
-
-    const prog = gl.createProgram()!
-    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT_SRC))
-    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG_SRC))
-    gl.linkProgram(prog)
-    gl.useProgram(prog)
-
-    // ── Full-screen quad ─────────────────────────────────────────────────
-    const buf = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf)
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-      gl.STATIC_DRAW
-    )
-
-    const posLoc = gl.getAttribLocation(prog, 'a_pos')
-    gl.enableVertexAttribArray(posLoc)
-    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
-
-    const uTime = gl.getUniformLocation(prog, 'u_time')
-    const uRes = gl.getUniformLocation(prog, 'u_res')
-
-    // ── Resize ───────────────────────────────────────────────────────────
-    function resize() {
-      const dpr = Math.min(window.devicePixelRatio, 1.5)  // cap DPR for perf
-      canvas!.width = canvas!.offsetWidth * dpr
-      canvas!.height = canvas!.offsetHeight * dpr
-      gl!.viewport(0, 0, canvas!.width, canvas!.height)
-    }
-
-    // ── Render loop ──────────────────────────────────────────────────────
-    let raf: number
-    let start = performance.now()
-
-    function render() {
-      const t = (performance.now() - start) / 1000
-      gl!.uniform1f(uTime, t)
-      gl!.uniform2f(uRes, canvas!.width, canvas!.height)
-      gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4)
-      raf = requestAnimationFrame(render)
-    }
-
-    resize()
-    render()
-
-    const ro = new ResizeObserver(resize)
-    ro.observe(canvas)
-
-    return () => {
-      cancelAnimationFrame(raf)
-      ro.disconnect()
-      gl.deleteProgram(prog)
-      gl.deleteBuffer(buf)
-    }
-  }, [])
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 0,
-        display: 'block',
-      }}
-    />
-  )
+// ─── Chat types ────────────────────────────────────────────────────────────────
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  ts: number
 }
 
 // ─── Whiteboard preview ───────────────────────────────────────────────────────
@@ -228,10 +54,10 @@ const WhiteboardPreview: React.FC<{ wb: Whiteboard }> = ({ wb }) => (
     style={{
       width: '100%',
       aspectRatio: '16 / 9',
-      background: '#181818',
+      background: '#faf8f4',
       position: 'relative',
       overflow: 'hidden',
-      borderBottom: '1px solid #303030',
+      borderBottom: '1px solid #ebe6df',
     }}
   >
     {wb.thumbnail ? (
@@ -243,123 +69,90 @@ const WhiteboardPreview: React.FC<{ wb: Whiteboard }> = ({ wb }) => (
     ) : (
       <div
         style={{
-          width: '100%',
-          height: '100%',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Ccircle cx='1' cy='1' r='0.8' fill='%23303030'/%3E%3C/svg%3E")`,
+          width: '100%', height: '100%',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Ccircle cx='1' cy='1' r='0.9' fill='%23ddd8d0'/%3E%3C/svg%3E")`,
           backgroundRepeat: 'repeat',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <span style={{ fontSize: 28, opacity: 0.3 }}>🍕</span>
+        <FormOutlined style={{ fontSize: 24, color: '#c8bfb0', opacity: 0.5 }} />
       </div>
     )}
   </div>
 )
 
-// ─── Single whiteboard card ───────────────────────────────────────────────────
+// ─── Whiteboard card ──────────────────────────────────────────────────────────
 const WhiteboardCard: React.FC<{
   wb: Whiteboard
   onOpen: (id: string) => void
   onDelete: (id: string) => void
 }> = ({ wb, onOpen, onDelete }) => {
   const [hovered, setHovered] = useState(false)
-
   return (
     <div
       style={{
-        background: hovered ? '#252525' : '#1e1e1e',
-        border: `1px solid ${hovered ? 'rgba(192,57,43,0.35)' : '#303030'}`,
-        borderRadius: 2,
+        background: '#ffffff',
+        border: `1px solid ${hovered ? 'rgba(192,57,43,0.28)' : '#ebe6df'}`,
+        borderRadius: 4,
         cursor: 'pointer',
         transition: 'all 0.18s cubic-bezier(0.16,1,0.3,1)',
         overflow: 'hidden',
         position: 'relative',
+        boxShadow: hovered
+          ? '0 6px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)'
+          : '0 1px 4px rgba(0,0,0,0.04)',
+        transform: hovered ? 'translateY(-2px)' : 'none',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => onOpen(wb.id)}
-      role="button"
-      tabIndex={0}
+      role="button" tabIndex={0}
       onKeyDown={e => e.key === 'Enter' && onOpen(wb.id)}
       aria-label={`Abrir pizarra: ${wb.title ?? 'Sin título'}`}
     >
       <WhiteboardPreview wb={wb} />
-
-      <div style={{ padding: '12px 14px 10px' }}>
-        <div
-          style={{
-            fontFamily: "'Inter', system-ui, sans-serif",
-            fontSize: 14,
-            fontWeight: 500,
-            color: '#ffffff',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            marginBottom: 6,
-          }}
-        >
+      <div style={{ padding: '12px 14px 12px' }}>
+        <div style={{
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: 13, fontWeight: 600, color: '#2d2820',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          marginBottom: 7,
+        }}>
           {wb.title ?? 'Sin título'}
         </div>
-
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: 11,
-              color: '#666666',
-              letterSpacing: '0.3px',
-            }}
-          >
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 11, color: '#b0a898', letterSpacing: '0.2px',
+          }}>
             <ClockCircleOutlined style={{ fontSize: 10 }} />
             {formatRelative(wb.updatedAt)}
           </span>
-
           {wb.tags && wb.tags.length > 0 && (
-            <span
-              style={{
-                padding: '2px 10px',
-                borderRadius: 9999,
-                background: '#252525',
-                border: '1px solid #303030',
-                fontFamily: "'Inter', system-ui, sans-serif",
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: '0.8px',
-                textTransform: 'uppercase',
-                color: '#969696',
-              }}
-            >
+            <Tag style={{
+              borderRadius: 9999, background: '#f5f1ea',
+              border: '1px solid #e5ddd0', fontSize: 10, fontWeight: 600,
+              letterSpacing: '0.6px', textTransform: 'uppercase',
+              color: '#9a8d78', margin: 0, padding: '1px 8px', lineHeight: '18px',
+            }}>
               {wb.tags[0]}
-            </span>
+            </Tag>
           )}
         </div>
       </div>
-
       {hovered && (
         <Tooltip title="Eliminar pizarra" placement="top">
           <button
             onClick={e => { e.stopPropagation(); onDelete(wb.id) }}
             style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              width: 28,
-              height: 28,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(20,20,20,0.85)',
-              border: '1px solid rgba(241,58,44,0.4)',
-              borderRadius: 2,
-              color: '#f13a2c',
-              cursor: 'pointer',
-              fontSize: 12,
+              position: 'absolute', top: 8, right: 8,
+              width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(255,255,255,0.94)',
+              border: '1px solid rgba(192,57,43,0.3)', borderRadius: 4,
+              color: '#c0392b', cursor: 'pointer', fontSize: 12,
               backdropFilter: 'blur(4px)',
+              transition: 'all 0.15s ease',
             }}
           >
             <DeleteOutlined />
@@ -370,15 +163,256 @@ const WhiteboardCard: React.FC<{
   )
 }
 
-// ─── Main landing page ────────────────────────────────────────────────────────
+// ─── Feature pill ─────────────────────────────────────────────────────────────
+const FeaturePill: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
+  <div style={{
+    display: 'inline-flex', alignItems: 'center', gap: 7,
+    padding: '5px 13px',
+    background: 'rgba(255,255,255,0.7)',
+    border: '1px solid #e5ddd0', borderRadius: 9999,
+    fontFamily: "'Inter', system-ui, sans-serif",
+    fontSize: 12, fontWeight: 500, color: '#7a6e5e', letterSpacing: '0.2px',
+    backdropFilter: 'blur(4px)',
+  }}>
+    {icon}{label}
+  </div>
+)
+
+// ─── Chat bubble ──────────────────────────────────────────────────────────────
+const ChatBubble: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
+  const isUser = msg.role === 'user'
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: isUser ? 'row-reverse' : 'row',
+      alignItems: 'flex-end',
+      gap: 8,
+      marginBottom: 12,
+    }}>
+      <Avatar
+        size={28}
+        icon={isUser ? <UserOutlined /> : <RobotOutlined />}
+        style={{
+          background: isUser ? '#c0392b' : '#f2ede6',
+          color: isUser ? '#fff' : '#7a6e5e',
+          flexShrink: 0,
+        }}
+      />
+      <div style={{
+        maxWidth: '75%',
+        padding: '9px 13px',
+        background: isUser ? '#c0392b' : '#ffffff',
+        border: isUser ? 'none' : '1px solid #ebe6df',
+        borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}>
+        <p style={{
+          margin: 0,
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: 13, lineHeight: 1.55,
+          color: isUser ? '#fff' : '#2d2820',
+          whiteSpace: 'pre-wrap',
+        }}>
+          {msg.content}
+        </p>
+        <span style={{
+          display: 'block', marginTop: 4,
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: 10, color: isUser ? 'rgba(255,255,255,0.6)' : '#b0a898',
+          textAlign: isUser ? 'left' : 'right',
+        }}>
+          {new Date(msg.ts).toLocaleTimeString('es-HN', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Chat panel ───────────────────────────────────────────────────────────────
+const ChatPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: '¡Hola! Soy tu asistente de PizzerIA. ¿Sobre qué quieres aprender hoy?',
+      ts: Date.now(),
+    },
+  ])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const send = useCallback(async () => {
+    const text = input.trim()
+    if (!text || loading) return
+    setInput('')
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: 'user', content: text, ts: Date.now() }
+    setMessages(prev => [...prev, userMsg])
+    setLoading(true)
+    // Placeholder — replace with actual AI call
+    await new Promise(r => setTimeout(r, 900))
+    setMessages(prev => [...prev, {
+      id: `a-${Date.now()}`, role: 'assistant',
+      content: 'Eso es un tema interesante. Puedo ayudarte a crear una pizarra sobre ello. ¡Escribe un tema en el buscador de arriba y presiona Enter!',
+      ts: Date.now(),
+    }])
+    setLoading(false)
+  }, [input, loading])
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 88, right: 28, zIndex: 200,
+      width: 340, height: 460,
+      background: '#ffffff',
+      border: '1px solid #e0d8cd',
+      borderRadius: 8,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+      display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
+      animation: 'chatSlideUp 0.22s cubic-bezier(0.16,1,0.3,1)',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '12px 16px',
+        background: '#c0392b',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.18)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <RobotOutlined style={{ fontSize: 14, color: '#fff' }} />
+          </div>
+          <div>
+            <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 13, fontWeight: 600, color: '#fff' }}>
+              Asistente PizzerIA
+            </div>
+            <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10, color: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#6ee7a0', display: 'inline-block' }} />
+              En línea
+            </div>
+          </div>
+        </div>
+        <button onClick={onClose} style={{
+          width: 28, height: 28, background: 'rgba(255,255,255,0.15)',
+          border: 'none', borderRadius: 4, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+        }}>
+          <CloseOutlined style={{ fontSize: 12 }} />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '14px 14px 4px',
+        background: '#faf8f4',
+      }}>
+        {messages.map(m => <ChatBubble key={m.id} msg={m} />)}
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginBottom: 12 }}>
+            <Avatar size={28} icon={<RobotOutlined />} style={{ background: '#f2ede6', color: '#7a6e5e', flexShrink: 0 }} />
+            <div style={{
+              padding: '10px 14px',
+              background: '#ffffff', border: '1px solid #ebe6df',
+              borderRadius: '12px 12px 12px 2px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            }}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center', height: 16 }}>
+                {[0, 1, 2].map(i => (
+                  <span key={i} style={{
+                    width: 6, height: 6, borderRadius: '50%', background: '#c0392b',
+                    opacity: 0.4,
+                    animation: `typingDot 1.2s ${i * 0.2}s ease-in-out infinite`,
+                  }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{
+        padding: '10px 12px',
+        borderTop: '1px solid #ebe6df',
+        background: '#ffffff',
+        display: 'flex', gap: 8, alignItems: 'flex-end',
+        flexShrink: 0,
+      }}>
+        <Input.TextArea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder="Pregunta algo…"
+          autoSize={{ minRows: 1, maxRows: 4 }}
+          style={{
+            flex: 1, resize: 'none', borderRadius: 6,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 13, border: '1px solid #e0d8cd',
+            background: '#faf8f4', color: '#2d2820',
+          }}
+          styles={{ textarea: { background: '#faf8f4' } }}
+        />
+        <button
+          onClick={send}
+          disabled={!input.trim() || loading}
+          style={{
+            width: 34, height: 34, flexShrink: 0,
+            background: input.trim() && !loading ? '#c0392b' : '#f0ece6',
+            border: 'none', borderRadius: 6,
+            color: input.trim() && !loading ? '#fff' : '#c8bfb0',
+            cursor: input.trim() && !loading ? 'pointer' : 'not-allowed',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <SendOutlined style={{ fontSize: 14 }} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Chat FAB ─────────────────────────────────────────────────────────────────
+const ChatFAB: React.FC<{ open: boolean; onClick: () => void }> = ({ open, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      position: 'fixed', bottom: 28, right: 28, zIndex: 200,
+      width: 52, height: 52, borderRadius: '50%',
+      background: open ? '#9d2211' : '#c0392b',
+      border: 'none', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      boxShadow: '0 4px 16px rgba(192,57,43,0.35), 0 2px 6px rgba(0,0,0,0.1)',
+      transition: 'all 0.2s cubic-bezier(0.16,1,0.3,1)',
+      transform: open ? 'rotate(90deg) scale(0.92)' : 'rotate(0deg) scale(1)',
+    }}
+    aria-label={open ? 'Cerrar chat' : 'Abrir asistente'}
+  >
+    {open
+      ? <CloseOutlined style={{ fontSize: 18, color: '#fff' }} />
+      : <MessageOutlined style={{ fontSize: 18, color: '#fff' }} />
+    }
+  </button>
+)
+
+// ─── Landing page ─────────────────────────────────────────────────────────────
 function LandingPage() {
   const navigate = useNavigate()
   const { message } = App.useApp()
   const [query, setQuery] = useState('')
+  const [chatOpen, setChatOpen] = useState(false)
   const { whiteboards, isLoading, sortByDate, remove, save } = useWhiteboards()
 
   const recent = useMemo(() => sortByDate('desc').slice(0, 5), [sortByDate])
-
   const filtered = useMemo(() => {
     if (!query.trim()) return recent
     const q = query.toLowerCase()
@@ -388,28 +422,16 @@ function LandingPage() {
     )
   }, [recent, query])
 
-  const handleOpen = useCallback((id: string) => {
-    navigate({ to: '/whiteboard/$id', params: { id } })
-  }, [navigate])
-
+  const handleOpen = useCallback((id: string) => navigate({ to: '/whiteboard/$id', params: { id } }), [navigate])
   const handleNew = useCallback(async () => {
     const id = `wb-${Date.now()}`
-    await save({
-      id,
-      title: 'Nueva pizarra',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      chat: [] as any,
-      nodes: [],
-    })
+    await save({ id, title: 'Nueva pizarra', createdAt: Date.now(), updatedAt: Date.now(), chat: [] as any, nodes: [] })
     navigate({ to: '/whiteboard/$id', params: { id } })
   }, [save, navigate])
-
   const handleDelete = useCallback(async (id: string) => {
     await remove(id)
     message.success({ content: 'Pizarra eliminada', duration: 1.5 })
   }, [remove, message])
-
   const handleStart = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       const q = (e.target as HTMLInputElement).value.trim()
@@ -421,255 +443,235 @@ function LandingPage() {
   }, [save, navigate])
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh', background: '#141414', overflow: 'hidden' }}>
+    <>
+      {/* Keyframe animations (injected once) */}
+      <style>{`
+        @keyframes chatSlideUp {
+          from { opacity: 0; transform: translateY(12px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+        @keyframes typingDot {
+          0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+          30%            { transform: translateY(-5px); opacity: 1;   }
+        }
+      `}</style>
 
-      {/* ── WebGL ember shader — fills behind all content ── */}
-      <EmberShader />
+      <div style={{
+        minHeight: '100vh',
+        background: '#f7f4ee',
+        backgroundImage: RULED_LINES_BG,
+        backgroundRepeat: 'repeat-y',
+        backgroundSize: '100% 32px',
+      }}>
+        {/* Notebook margin line */}
+        <div style={{
+          position: 'fixed', left: 72, top: 0, bottom: 0, width: 1,
+          background: 'rgba(192,57,43,0.10)', zIndex: 0, pointerEvents: 'none',
+        }} />
 
-      {/* ── Content layer ── */}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          maxWidth: 860,
-          margin: '0 auto',
-          padding: '80px 32px 64px',
-        }}
-      >
-        {/* Hero */}
-        <div style={{ marginBottom: 48, textAlign: 'center' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              marginBottom: 16,
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: '1.4px',
-              textTransform: 'uppercase',
-              color: '#c0392b',
-            }}
-          >
-            Tu espacio de ideas
-          </span>
-          <h1
-            style={{
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: 'clamp(32px, 5vw, 56px)',
-              fontWeight: 500,
-              letterSpacing: '-0.8px',
-              lineHeight: 1.1,
-              color: '#ffffff',
-              margin: '0 0 16px',
-            }}
-          >
-            PizzerIA
-          </h1>
-          <p
-            style={{
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: 16,
-              fontWeight: 400,
-              color: '#969696',
-              lineHeight: 1.6,
-              maxWidth: 420,
-              margin: '0 auto',
-            }}
-          >
-            La pizarra digital con inteligencia artificial. Aprende, colabora y crea sin límites.
-          </p>
-        </div>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 860, margin: '0 auto', padding: '72px 40px 80px' }}>
 
-        {/* Input + Nueva CTA */}
-        <div style={{ maxWidth: 560, margin: '0 auto 56px', display: 'flex', gap: 0 }}>
-          <Input
-            size="large"
-            placeholder="Iniciar a aprender… escribe un tema y presiona Enter"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={handleStart}
-            prefix={<SearchOutlined style={{ color: '#444444' }} />}
-            style={{
-              flex: 1,
-              height: 48,
-              background: '#1e1e1e',
-              border: '1px solid #303030',
-              borderRight: 'none',
-              borderRadius: 0,
-              color: '#ffffff',
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: 14,
-            }}
-            styles={{ input: { background: '#1e1e1e', color: '#ffffff' } }}
-          />
-          <button
-            onClick={handleNew}
-            style={{
-              height: 48,
-              padding: '0 24px',
-              background: '#c0392b',
-              border: 'none',
-              borderRadius: 0,
-              color: '#ffffff',
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: 14,
-              fontWeight: 700,
-              letterSpacing: '1.4px',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              flexShrink: 0,
-              transition: 'background 0.18s cubic-bezier(0.16,1,0.3,1)',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#9d2211')}
-            onMouseLeave={e => (e.currentTarget.style.background = '#c0392b')}
-          >
-            <PlusOutlined style={{ fontSize: 14 }} />
-            Nueva
-          </button>
-        </div>
+          {/* ── Hero ── */}
+          <div style={{ marginBottom: 56, textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 22 }}>
+              <EditOutlined style={{ fontSize: 20, color: '#c0392b', opacity: 0.55 }} />
+              <div style={{
+                width: 52, height: 52, borderRadius: '50%', background: '#c0392b',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 16px rgba(192,57,43,0.3)',
+              }}>
+                <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-label="PizzerIA logo">
+                  <circle cx="16" cy="16" r="13" fill="rgba(255,255,255,0.15)" />
+                  <path d="M16 5 L28 25 L4 25 Z" fill="#f5deb3" />
+                  <path d="M16 5 L28 25 L4 25 Z" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+                  <circle cx="16" cy="18" r="2" fill="#922b21" />
+                  <circle cx="12" cy="21" r="1.5" fill="#922b21" />
+                  <circle cx="20" cy="21" r="1.5" fill="#922b21" />
+                  <path d="M4 25 Q16 29 28 25" stroke="#b5651d" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                </svg>
+              </div>
+              <BookOutlined style={{ fontSize: 20, color: '#c0392b', opacity: 0.55 }} />
+            </div>
 
-        {/* Recientes */}
-        <section>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 20,
-              paddingBottom: 12,
-              borderBottom: '1px solid #303030',
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "'Inter', system-ui, sans-serif",
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '1.1px',
-                textTransform: 'uppercase',
-                color: '#969696',
-              }}
-            >
-              Pizarras recientes
+            <span style={{
+              display: 'inline-block', marginBottom: 10,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#c0392b',
+            }}>
+              Tu espacio de aprendizaje
             </span>
-            <button
-              onClick={() => navigate({ to: '/whiteboards' })}
+
+            <h1 style={{
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: 'clamp(34px, 5vw, 54px)', fontWeight: 700,
+              letterSpacing: '-1px', lineHeight: 1.08, color: '#1a1510', margin: '0 0 16px',
+            }}>
+              PizzerIA
+            </h1>
+
+            <p style={{
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: 16, fontWeight: 400, color: '#7a6e5e',
+              lineHeight: 1.65, maxWidth: 400, margin: '0 auto 28px',
+            }}>
+              La pizarra digital con inteligencia artificial. Aprende, colabora y crea sin límites.
+            </p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              <FeaturePill icon={<FormOutlined style={{ fontSize: 12 }} />} label="Pizarras digitales" />
+              <FeaturePill icon={<BulbOutlined style={{ fontSize: 12 }} />} label="IA integrada" />
+              <FeaturePill icon={<BookOutlined style={{ fontSize: 12 }} />} label="Organiza tus ideas" />
+            </div>
+          </div>
+
+          {/* ── Search + New ── */}
+          <div style={{ maxWidth: 580, margin: '0 auto 60px', display: 'flex', gap: 0, boxShadow: '0 2px 16px rgba(0,0,0,0.08)' }}>
+            <Input
+              size="large"
+              placeholder="Escribe un tema y presiona Enter para empezar…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={handleStart}
+              prefix={<SearchOutlined style={{ color: '#c0bbb0' }} />}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: "'Inter', system-ui, sans-serif",
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: '0.65px',
-                textTransform: 'uppercase',
-                color: '#c0392b',
-                padding: 0,
+                flex: 1, height: 50,
+                background: '#ffffff', border: '1px solid #e5ddd0', borderRight: 'none',
+                borderRadius: '4px 0 0 4px', color: '#2d2820',
+                fontFamily: "'Inter', system-ui, sans-serif", fontSize: 14,
               }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#9d2211')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#c0392b')}
+              styles={{ input: { background: '#ffffff', color: '#2d2820' } }}
+            />
+            <button
+              onClick={handleNew}
+              style={{
+                height: 50, padding: '0 26px',
+                background: '#c0392b', border: 'none',
+                borderRadius: '0 4px 4px 0',
+                color: '#ffffff',
+                fontFamily: "'Inter', system-ui, sans-serif",
+                fontSize: 12, fontWeight: 700, letterSpacing: '1.4px', textTransform: 'uppercase',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+                transition: 'background 0.18s cubic-bezier(0.16,1,0.3,1)',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#9d2211')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#c0392b')}
             >
-              Ver todas
-              <ArrowRightOutlined style={{ fontSize: 10 }} />
+              <PlusOutlined style={{ fontSize: 13 }} />
+              Nueva
             </button>
           </div>
 
-          {isLoading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Card
-                  key={i}
-                  style={{ background: '#1e1e1e', border: '1px solid #303030', borderRadius: 2 }}
-                  styles={{ body: { padding: 0 } }}
-                >
-                  <Skeleton.Image active style={{ width: '100%', height: 112, borderRadius: 0 }} />
-                  <div style={{ padding: '12px 14px' }}>
-                    <Skeleton active paragraph={{ rows: 1 }} title={{ width: '60%' }} />
-                  </div>
-                </Card>
-              ))}
+          {/* ── Recientes ── */}
+          <section>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 20, paddingBottom: 14,
+              borderBottom: '1px solid #e5ddd0',
+            }}>
+              <span style={{
+                fontFamily: "'Inter', system-ui, sans-serif",
+                fontSize: 11, fontWeight: 700, letterSpacing: '1.4px', textTransform: 'uppercase',
+                color: '#b0a898', display: 'flex', alignItems: 'center', gap: 7,
+              }}>
+                <ClockCircleOutlined style={{ fontSize: 11 }} />
+                Pizarras recientes
+              </span>
+              <button
+                onClick={() => navigate({ to: '/whiteboards' })}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  fontSize: 12, fontWeight: 600, letterSpacing: '0.65px', textTransform: 'uppercase',
+                  color: '#c0392b', padding: 0,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#9d2211')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#c0392b')}
+              >
+                Ver todas <ArrowRightOutlined style={{ fontSize: 10 }} />
+              </button>
             </div>
-          ) : filtered.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 14, color: '#666666' }}>
-                  {query ? 'Sin resultados para esa búsqueda' : 'Aún no tienes pizarras. ¡Crea la primera!'}
-                </span>
-              }
-              style={{ padding: '40px 0', color: '#666666' }}
-            >
-              {!query && (
-                <button
-                  onClick={handleNew}
-                  style={{
-                    height: 48,
-                    padding: '0 32px',
-                    background: '#c0392b',
-                    border: 'none',
-                    borderRadius: 0,
-                    color: '#ffffff',
-                    fontFamily: "'Inter', system-ui, sans-serif",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: '1.4px',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Crear pizarra
-                </button>
-              )}
-            </Empty>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-              {filtered.map(wb => (
-                <WhiteboardCard key={wb.id} wb={wb} onOpen={handleOpen} onDelete={handleDelete} />
-              ))}
 
-              {whiteboards.length > 5 && (
-                <button
-                  onClick={() => navigate({ to: '/whiteboards' })}
-                  style={{
-                    background: 'transparent',
-                    border: '1px dashed #303030',
-                    borderRadius: 2,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    minHeight: 160,
-                    color: '#666666',
-                    transition: 'all 0.18s cubic-bezier(0.16,1,0.3,1)',
-                    fontFamily: "'Inter', system-ui, sans-serif",
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = 'rgba(192,57,43,0.4)'
-                    e.currentTarget.style.color = '#c0392b'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = '#303030'
-                    e.currentTarget.style.color = '#666666'
-                  }}
-                >
-                  <ArrowRightOutlined style={{ fontSize: 20 }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '1.1px', textTransform: 'uppercase' }}>
-                    {whiteboards.length - 5} más
+            {isLoading ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Card key={i} style={{ background: '#ffffff', border: '1px solid #ebe6df', borderRadius: 4 }} styles={{ body: { padding: 0 } }}>
+                    <Skeleton.Image active style={{ width: '100%', height: 112, borderRadius: 0 }} />
+                    <div style={{ padding: '12px 14px' }}>
+                      <Skeleton active paragraph={{ rows: 1 }} title={{ width: '60%' }} />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 14, color: '#b0a898' }}>
+                    {query ? 'Sin resultados para esa búsqueda' : 'Aún no tienes pizarras. ¡Crea la primera!'}
                   </span>
-                </button>
-              )}
-            </div>
-          )}
-        </section>
+                }
+                style={{ padding: '52px 0', color: '#b0a898' }}
+              >
+                {!query && (
+                  <button
+                    onClick={handleNew}
+                    style={{
+                      height: 44, padding: '0 28px',
+                      background: '#c0392b', border: 'none', borderRadius: 4,
+                      color: '#ffffff', fontFamily: "'Inter', system-ui, sans-serif",
+                      fontSize: 13, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#9d2211')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#c0392b')}
+                  >
+                    Crear pizarra
+                  </button>
+                )}
+              </Empty>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+                {filtered.map(wb => (
+                  <WhiteboardCard key={wb.id} wb={wb} onOpen={handleOpen} onDelete={handleDelete} />
+                ))}
+                {whiteboards.length > 5 && (
+                  <button
+                    onClick={() => navigate({ to: '/whiteboards' })}
+                    style={{
+                      background: 'transparent', border: '1.5px dashed #ddd8d0', borderRadius: 4,
+                      cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: 8,
+                      minHeight: 160, color: '#c0bbb0',
+                      transition: 'all 0.18s cubic-bezier(0.16,1,0.3,1)',
+                      fontFamily: "'Inter', system-ui, sans-serif",
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = 'rgba(192,57,43,0.35)'
+                      e.currentTarget.style.color = '#c0392b'
+                      e.currentTarget.style.background = 'rgba(192,57,43,0.03)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = '#ddd8d0'
+                      e.currentTarget.style.color = '#c0bbb0'
+                      e.currentTarget.style.background = 'transparent'
+                    }}
+                  >
+                    <ArrowRightOutlined style={{ fontSize: 18 }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '1.1px', textTransform: 'uppercase' }}>
+                      {whiteboards.length - 5} más
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+
+      {/* ── Floating chat ── */}
+      {chatOpen && <ChatPanel onClose={() => setChatOpen(false)} />}
+      <ChatFAB open={chatOpen} onClick={() => setChatOpen(v => !v)} />
+    </>
   )
 }

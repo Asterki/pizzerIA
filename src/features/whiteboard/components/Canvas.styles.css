@@ -1,0 +1,91 @@
+/* ── Brand tokens ────────────────────────────────────────────────────────── */
+.pizzeria-canvas .excalidraw {
+  --color-primary: #c0392b;
+  --color-primary-darker: #9d2211;
+  --color-primary-darkest: #7b241c;
+  --color-primary-light: rgba(192, 57, 43, 0.14);
+  --color-primary-contrast-offset: #b03020;
+
+  --island-bg-color: #ffffff;
+  --color-surface-low: #f7f4ee;
+  --color-surface-mid: #f2ede6;
+  --color-surface-high: #ffffff;
+
+  --text-primary-color: #2d2820;
+  --icon-fill-color: #7a6e5e;
+
+  --border-radius-m: 2px;
+  --border-radius-l: 2px;
+  --shadow-island: 0 2px 12px rgba(0, 0, 0, 0.08);
+
+  --input-border-color: #e0d8cd;
+  --input-hover-bg-color: #f7f4ee;
+  --input-label-color: #7a6e5e;
+  --button-gray-1: #f2ede6;
+  --button-gray-2: #e8e3da;
+  --button-gray-3: #d4cec5;
+  --color-selection: rgba(192, 57, 43, 0.16);
+
+  font-family: "Inter", system-ui, sans-serif;
+  scrollbar-color: #d4cec5 transparent;
+}
+
+/* ── Hide: lock button ───────────────────────────────────────────────────── */
+.pizzeria-canvas .excalidraw .ToolIcon__lock {
+  display: none !important;
+}
+/* Also hides it in zen-mode toolbar */
+.pizzeria-canvas .excalidraw [data-testid="toolbar-lock"] {
+  display: none !important;
+}
+
+/* ── Hide: shape library (figures) button ───────────────────────────────── */
+.pizzeria-canvas .excalidraw .sidebar-trigger,
+.pizzeria-canvas .excalidraw [data-testid="sidebar-trigger"],
+.pizzeria-canvas .excalidraw .ToolIcon__library {
+  display: none !important;
+}
+
+/* ── Add undo/redo to the toolbar via CSS — Excalidraw renders them but     */
+/* hides them in zen mode. Un-hide them and position them after the toolbar. */
+.pizzeria-canvas .excalidraw.zen-mode .undo-redo-buttons {
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* ── Welcome screen ─────────────────────────────────────────────────────── */
+.pizzeria-canvas .welcome-screen-center__logo-subtitle,
+.pizzeria-canvas .excalidraw-link {
+  display: none !important;
+}
+.pizzeria-canvas .welcome-screen-center__heading {
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 18px !important;
+  letter-spacing: -0.2px !important;
+  color: #2d2820 !important;
+}
+
+/* ── Dark mode variant ──────────────────────────────────────────────────── */
+.pizzeria-canvas .excalidraw.theme--dark {
+  --color-primary: #e05a4a;
+  --color-primary-darker: #c0392b;
+  --color-primary-darkest: #9d2211;
+  --color-primary-light: rgba(224, 90, 74, 0.18);
+  --island-bg-color: #1e1e1e;
+  --color-surface-low: #141414;
+  --color-surface-mid: #181818;
+  --color-surface-high: #252525;
+  --text-primary-color: #f0ece6;
+  --icon-fill-color: #969696;
+  --input-border-color: #303030;
+  --button-gray-1: #252525;
+  --button-gray-2: #303030;
+  --button-gray-3: #404040;
+  --shadow-island: 0 2px 12px rgba(0, 0, 0, 0.32);
+}
+
+.pizzeria-canvas .App-toolbar__extra-tools-trigger {
+  display: none !important;
+}
